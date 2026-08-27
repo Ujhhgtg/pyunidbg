@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import jpype
 
@@ -51,7 +51,9 @@ def test_previous_partial_feature_families(tmp_path: Path) -> None:
         assert symbol.module_name == "libadd.so"
         assert symbol.address >= module.base
         assert int(symbol.call(4, 5)) == 9
-        assert module.closest_symbol(symbol.address).name == "add_numbers"
+        closest = module.closest_symbol(symbol.address)
+        assert closest is not None
+        assert closest.name == "add_numbers"
         assert module.path == "libadd.so"
         assert module.file_size == FIXTURE.stat().st_size
         assert module.size > 0
@@ -94,6 +96,7 @@ def test_previous_partial_feature_families(tmp_path: Path) -> None:
         # Generic dispatch completes the remaining unidbg Jni callback families.
         handler = FullJniHandler()
         emulator.vm.set_jni(handler)
+        assert emulator.vm._jni_references is not None
         bridge = emulator.vm._jni_references[0]
         clazz = emulator.vm.resolve_class("x/Coverage")
         obj = clazz.new_object()
@@ -119,6 +122,6 @@ def test_previous_partial_feature_families(tmp_path: Path) -> None:
 def test_code_trace_in_fresh_process() -> None:
     script = Path(__file__).parent / "run_code_trace_check.py"
     result = subprocess.run(
-        [sys.executable, str(script)], capture_output=True, text=True, timeout=30
+        [sys.executable, str(script)], capture_output=True, text=True, timeout=30, check=False
     )
     assert result.returncode == 0, result.stdout + result.stderr

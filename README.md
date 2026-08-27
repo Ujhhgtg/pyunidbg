@@ -9,8 +9,8 @@ the package, so emulator startup does not run Gradle, Maven, or a downloader.
 
 ## Status and API coverage
 
-The coverage estimate is based on 14 Android ARM64 feature families, not on a
-raw count of Java methods. Thirteen are fully wrapped and one currently requires
+The coverage estimate is based on 15 Android ARM64 feature families, not on a
+raw count of Java methods. Fourteen are fully wrapped and one currently requires
 direct Java access: **93% fully wrapped**. There are no partially covered
 families.
 
@@ -25,11 +25,12 @@ families.
 | Dalvik VM, classes, and values | Full | Class hierarchy resolution plus string, byte, boolean, integer, object, and array values |
 | JNI invocation | Full | Static and instance calls with void, boolean, integer, long, and object results |
 | JNI mocking | Full | Named common callbacks plus generic typed dispatch for every method, field, allocation, reflection, and acceptance callback family |
-| Debugging and tracing | Full | Read/write/code/system-memory tracing, trace redirection, debugger types, filters, breakpoints, function calls, debugger run, and MCP tools |
+| Debugging and tracing | Full | Read/write/code/system-memory tracing, trace redirection, debugger types, filters, breakpoints, function calls, and debugger run |
 | Module and symbol inspection | Full | Metadata, regions, exports, closest/dependency symbols, needed libraries, registration, init listeners, entry calls, and unload |
 | Filesystem and Android environment | Full | Rootfs operations, syscall handler controls, byte/file IO resolvers, file listeners, and APK asset resolvers |
 | Advanced hooks and listeners | Full | Detachable backend hooks, module/import/mmap listeners, Dobby, HookZz, Whale, xHook, ARM64 SVCs, system properties, and leak tracking |
-| Threads, worker pools, serialization, and MCP | Java access | No Python convenience API yet |
+| MCP integration | Full | Python-native modern `/mcp` server, 42 built-in tools, custom typed tools, events, allocations, and breakpoint execution control |
+| Threads, worker pools, and serialization | Java access | No Python convenience API yet |
 
 Every wrapper exposes `.java`, and `pyunidbg.java_class()` provides access to
 the bundled unidbg classpath, so missing convenience methods usually do not
@@ -158,6 +159,38 @@ with emulator.memory.listen_mmap(
 service = emulator.register_svc(lambda emulator: 42, name="answer")
 assert service.call() == 42
 ```
+
+## Python-native MCP server
+
+The MCP implementation is entirely Python-native and does not use unidbg's
+Java `McpServer`, `McpTools`, or console input injection. It uses the official
+Python MCP SDK and exposes modern Streamable HTTP at `/mcp`.
+
+```python
+with emulator.mcp(port=9239) as server:
+    print(server.url)  # http://127.0.0.1:9239/mcp
+    print(server.client_config())
+```
+
+The server binds to `127.0.0.1` by default. Non-loopback binding is rejected
+unless `allow_remote=True` is explicit.
+
+Custom tools use ordinary annotated Python functions:
+
+```python
+server = emulator.mcp()
+
+@server.tool()
+def encrypt(input: str) -> str:
+    """Run the target encryption routine."""
+    return run_encrypt(input)
+```
+
+Built-in tools cover modules and symbols, memory and tracked allocations,
+registers, assembly/disassembly, native calls, breakpoints, stepping, tracing,
+and event polling. Emulator operations are serialized through one MCP worker;
+Python-managed breakpoints pause the emulation thread while MCP tools inspect
+or modify state.
 
 ## WeChatX acceptance harness
 

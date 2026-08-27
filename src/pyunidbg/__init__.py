@@ -1,8 +1,8 @@
 """Python bindings for unidbg's Android ARM64 emulator."""
 
 from ._runtime import ensure_jvm, java_class
-from .dvm import DvmClass, DvmObject, VM, VaList
 from .debug import Breakpoint, Debugger, Trace
+from .dvm import VM, DvmClass, DvmObject, VaList
 from .emulator import AndroidEmulator, MemoryRegion, Module, RegisterContext, Symbol
 from .errors import (
     JavaRuntimeError,
@@ -10,9 +10,7 @@ from .errors import (
     PyUnidbgError,
     UnsupportedPlatformError,
 )
-from .jni import NOT_HANDLED, JniHandler
 from .filesystem import FileSystem, IOFailure, IOFallback, SyscallHandler
-from .memory import Allocation, Memory, Pointer
 from .hooks import (
     HookContext,
     HookDecision,
@@ -25,42 +23,48 @@ from .hooks import (
     PermanentRegistration,
     SvcRegistration,
 )
+from .jni import NOT_HANDLED, JniHandler
+from .mcp import EmulatorController, McpEvent, PyUnidbgMcpServer
+from .memory import Allocation, Memory, Pointer
 
 __all__ = [
+    "NOT_HANDLED",
+    "VM",
     "Allocation",
     "AndroidEmulator",
     "Breakpoint",
     "Debugger",
     "DvmClass",
     "DvmObject",
+    "EmulatorController",
     "FileSystem",
-    "IOFailure",
-    "IOFallback",
     "HookContext",
     "HookDecision",
     "HookEntry",
     "HookHandle",
+    "IOFailure",
+    "IOFallback",
     "JavaRuntimeError",
     "JniHandler",
     "JvmAlreadyRunningError",
     "LeakRecord",
+    "McpEvent",
     "Memory",
     "MemoryEvent",
     "MemoryHookMask",
     "MemoryLeakTracker",
     "MemoryRegion",
     "Module",
-    "NOT_HANDLED",
-    "Pointer",
     "PermanentRegistration",
+    "Pointer",
     "PyUnidbgError",
+    "PyUnidbgMcpServer",
     "RegisterContext",
-    "Symbol",
     "SvcRegistration",
+    "Symbol",
     "SyscallHandler",
     "Trace",
     "UnsupportedPlatformError",
-    "VM",
     "VaList",
     "ensure_jvm",
     "java_class",

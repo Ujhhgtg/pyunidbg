@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from types import TracebackType
+from typing import Any, Self
 
 import jpype
 
@@ -25,10 +27,15 @@ class Trace:
             self._stream.close()
             self._stream = None
 
-    def __enter__(self) -> Trace:
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self.stop()
 
 
@@ -125,10 +132,6 @@ class Debugger:
         proxy = jpype.JProxy(self._emulator._class("com.github.unidbg.debugger.DebugRunnable"), inst=impl)
         self._references.extend((impl, proxy, callback))
         return self.java.run(proxy)
-
-    def add_mcp_tool(self, name: str, description: str, *arguments: str) -> None:
-        string_array = jpype.JArray(self._emulator._class("java.lang.String"))(arguments)
-        self.java.addMcpTool(name, description, string_array)
 
     def close(self) -> None:
         self.java.close()

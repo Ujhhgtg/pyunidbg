@@ -93,6 +93,11 @@ def _bytes(value: Any) -> bytes:
     return bytes((int(item) & 0xFF) for item in value)
 
 
+def _jarray(component: Any, value: Any) -> Any:
+    factory: Any = jpype.JArray(component)
+    return factory(value)
+
+
 class DecryptorJni(pyunidbg.JniHandler):
     def __init__(self, core: str, rootfs: Path, module_dir: Path, capture_dir: Path):
         self.core = core
@@ -112,7 +117,7 @@ class DecryptorJni(pyunidbg.JniHandler):
             return str(self.rootfs / path.lstrip("/"))
         return path
 
-    def call_object_method(self, vm, obj, signature, args):  # noqa: C901, PLR0912
+    def call_object_method(self, vm, obj, signature, args):
         print(f"  [JNI Call] Object Method: {signature}")
         if signature == "android/content/Context->getFilesDir()Ljava/io/File;":
             return vm.resolve_class("java/io/File").new_object(
@@ -198,7 +203,7 @@ class DecryptorJni(pyunidbg.JniHandler):
                 return vm.array(*(cls.new_object(certificate) for certificate in certificates))
             factory = self._j("java.security.cert.CertificateFactory").getInstance("X.509")
             source = self._j("java.io.ByteArrayInputStream")(
-                jpype.JArray(jpype.JByte)((self.module_dir / "wechatx_module_cert.der").read_bytes())
+                _jarray(jpype.JByte, (self.module_dir / "wechatx_module_cert.der").read_bytes())
             )
             certificate = factory.generateCertificate(source)
             return vm.array(vm.resolve_class("java/security/cert/Certificate").new_object(certificate))
@@ -222,7 +227,7 @@ class DecryptorJni(pyunidbg.JniHandler):
             return vm.bytes(data)
         return pyunidbg.NOT_HANDLED
 
-    def call_static_object_method(self, vm, cls, signature, args):  # noqa: C901
+    def call_static_object_method(self, vm, cls, signature, args):
         print(f"  [JNI Call] Static Object Method: {signature}")
         if signature == "java/lang/Integer->toHexString(I)Ljava/lang/String;":
             return vm.string(format(args.int(0) & 0xFF, "x"))
@@ -280,7 +285,7 @@ class DecryptorJni(pyunidbg.JniHandler):
             )
         return pyunidbg.NOT_HANDLED
 
-    def new_object(self, vm, cls, signature, args):  # noqa: C901, PLR0912
+    def new_object(self, vm, cls, signature, args):
         print(f"  [JNI Call] New Object: {signature}")
         if signature == "java/io/File-><init>(Ljava/lang/String;)V":
             return cls.new_object(self._j("java.io.File")(self._translate_path(str(args.object(0).value))))
@@ -328,7 +333,7 @@ class DecryptorJni(pyunidbg.JniHandler):
         }:
             key = args.object(0).value
             if len(key) == 0:
-                key = jpype.JArray(jpype.JByte)(bytes(16))
+                key = _jarray(jpype.JByte, bytes(16))
             self.aes_key = key
             algorithm_index = 3 if "BIIL" in signature else 1
             if "BIIL" in signature:
@@ -344,7 +349,7 @@ class DecryptorJni(pyunidbg.JniHandler):
         if signature.startswith("javax/crypto/spec/PBEKeySpec-><init>([C"):
             raw = _bytes(args.object(0).value)
             password = self._j("java.lang.String")(
-                jpype.JArray(jpype.JByte)(raw), self._j("java.nio.charset.StandardCharsets").UTF_16LE
+                _jarray(jpype.JByte, raw), self._j("java.nio.charset.StandardCharsets").UTF_16LE
             ).toCharArray()
             pbe = self._j("javax.crypto.spec.PBEKeySpec")
             if signature == "javax/crypto/spec/PBEKeySpec-><init>([C)V":
@@ -378,7 +383,7 @@ class DecryptorJni(pyunidbg.JniHandler):
             return cls.new_object(self._j("java.lang.Double")(args.double(0)))
         if signature == "dalvik/system/InMemoryDexClassLoader-><init>(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V":
             buffer = args.object(0).value
-            data = jpype.JArray(jpype.JByte)(int(buffer.remaining()))
+            data = _jarray(jpype.JByte, int(buffer.remaining()))
             buffer.get(data)
             target = self.capture_dir / f"{self.core}_decrypted.dex"
             target.write_bytes(_bytes(data))
@@ -386,7 +391,7 @@ class DecryptorJni(pyunidbg.JniHandler):
             return cls.new_object()
         return pyunidbg.NOT_HANDLED
 
-    def call_void_method(self, vm, obj, signature, args):  # noqa: C901
+    def call_void_method(self, vm, obj, signature, args):
         if signature.startswith("javax/crypto/Cipher->init("):
             try:
                 mode = args.int(0)
@@ -460,8 +465,8 @@ class DecryptorJni(pyunidbg.JniHandler):
         return bool(getattr(obj.value, method)()) if method else pyunidbg.NOT_HANDLED
 
     def call_int_method(self, vm, obj, signature, args):
-        if signature.startswith("javax/crypto/CipherInputStream->read(") or signature.startswith(
-            "javax/crypto/CipherInputStream->available("
+        if signature.startswith(
+            ("javax/crypto/CipherInputStream->read(", "javax/crypto/CipherInputStream->available(")
         ):
             return int(obj.value.read(args.object(0).value)) if "read([B)" in signature else int(obj.value.available())
         if signature == "java/util/zip/ZipInputStream->read([B)I":

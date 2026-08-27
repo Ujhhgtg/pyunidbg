@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import jpype
 
@@ -135,7 +136,8 @@ def install_io_resolver(emulator: Any, callback: Callable[[Any, str, int], Any])
     def make_io(value: Any, path: str, flags: int) -> Any:
         value = value.java if hasattr(value, "java") else value
         if isinstance(value, (bytes, bytearray, memoryview)):
-            data = jpype.JArray(jpype.JByte)(bytes(value))
+            factory: Any = jpype.JArray(jpype.JByte)
+            data = factory(bytes(value))
             return byte_io(int(flags), path, data)
         if isinstance(value, (str, Path)):
             return simple_io(int(flags), file_class(str(Path(value))), path)

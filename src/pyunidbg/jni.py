@@ -5,7 +5,7 @@ from typing import Any
 
 import jpype
 
-from .dvm import DvmClass, DvmObject, VM, VaList
+from .dvm import VM, DvmClass, DvmObject, VaList
 
 NOT_HANDLED = object()
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from typing import Any
 
 import jpype
@@ -7,6 +8,11 @@ import jpype
 
 def _unwrap(value: Any) -> Any:
     return value.java if hasattr(value, "java") else value
+
+
+def _jarray(component: Any, value: Any) -> Any:
+    factory: Any = jpype.JArray(component)
+    return factory(value)
 
 
 def _return_kind(signature: str) -> str:
@@ -21,20 +27,20 @@ class VaList:
         self._vm = vm
         self.java = java
 
-    def object(self, index: int) -> DvmObject | None:
+    def object(self, index: builtins.int) -> DvmObject | None:
         value = self.java.getObjectArg(index)
         return None if value is None else DvmObject(self._vm, value)
 
-    def int(self, index: int) -> int:
+    def int(self, index: builtins.int) -> builtins.int:
         return int(self.java.getIntArg(index))
 
-    def long(self, index: int) -> int:
+    def long(self, index: builtins.int) -> builtins.int:
         return int(self.java.getLongArg(index))
 
-    def float(self, index: int) -> float:
+    def float(self, index: builtins.int) -> builtins.float:
         return float(self.java.getFloatArg(index))
 
-    def double(self, index: int) -> float:
+    def double(self, index: builtins.int) -> builtins.float:
         return float(self.java.getDoubleArg(index))
 
 
@@ -126,7 +132,7 @@ class VM:
 
     def resolve_class(self, name: str, *parents: DvmClass) -> DvmClass:
         class_type = self._emulator._class("com.github.unidbg.linux.android.dvm.DvmClass")
-        parent_array = jpype.JArray(class_type)([_unwrap(parent) for parent in parents])
+        parent_array = _jarray(class_type, [_unwrap(parent) for parent in parents])
         return DvmClass(self, self.java.resolveClass(name, parent_array))
 
     def set_jni(self, handler: Any) -> None:
@@ -137,14 +143,12 @@ class VM:
         self._jni_references = references
 
     def set_asset_resolver(self, callback: Any) -> None:
-        owner = self
-
         class Resolver:
             def resolveAsset(self, name: str) -> Any:
                 value = callback(str(name))
                 if value is None:
                     return None
-                return jpype.JArray(jpype.JByte)(bytes(value))
+                return _jarray(jpype.JByte, bytes(value))
 
         impl = Resolver()
         proxy = jpype.JProxy(
@@ -177,11 +181,11 @@ class VM:
         value = self.java.getSignatures()
         return () if value is None else tuple(value)
 
-    def open_asset(self, name: str) -> bytes | None:
+    def open_asset(self, name: str) -> builtins.bytes | None:
         value = self.java.openAsset(name)
         return None if value is None else bytes(value)
 
-    def unzip(self, path: str) -> bytes | None:
+    def unzip(self, path: str) -> builtins.bytes | None:
         value = self.java.unzip(path)
         return None if value is None else bytes(value)
 
@@ -192,9 +196,9 @@ class VM:
         cls = self._emulator._class("com.github.unidbg.linux.android.dvm.StringObject")
         return DvmObject(self, cls(self.java, value))
 
-    def bytes(self, value: bytes | bytearray | memoryview) -> DvmObject:
+    def bytes(self, value: builtins.bytes | bytearray | memoryview) -> DvmObject:
         cls = self._emulator._class("com.github.unidbg.linux.android.dvm.array.ByteArray")
-        byte_array = jpype.JArray(jpype.JByte)(bytes(value))
+        byte_array = _jarray(jpype.JByte, bytes(value))
         return DvmObject(self, cls(self.java, byte_array))
 
     def boolean(self, value: bool) -> DvmObject:
@@ -208,7 +212,7 @@ class VM:
     def array(self, *values: DvmObject) -> DvmObject:
         base = self._emulator._class("com.github.unidbg.linux.android.dvm.DvmObject")
         cls = self._emulator._class("com.github.unidbg.linux.android.dvm.array.ArrayObject")
-        array = jpype.JArray(base)([_unwrap(value) for value in values])
+        array = _jarray(base, [_unwrap(value) for value in values])
         return DvmObject(self, cls(array))
 
     def _object_array(self, values: tuple[Any, ...]) -> Any:
@@ -223,7 +227,7 @@ class VM:
             elif isinstance(value, float):
                 value = jpype.JDouble(value)
             converted.append(value)
-        return jpype.JArray(object_class)(converted)
+        return _jarray(object_class, converted)
 
     def _raise_callback_error(self) -> None:
         error = self._callback_error

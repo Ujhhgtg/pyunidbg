@@ -1,22 +1,24 @@
 from __future__ import annotations
 
-from pathlib import Path
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from pathlib import Path
+from types import TracebackType
+from typing import Any, Self
 
 import jpype
 
 from ._runtime import ensure_jvm, java_class
-from .dvm import VM
 from .debug import Debugger, Trace
+from .dvm import VM
 from .filesystem import FileSystem, SyscallHandler, install_io_resolver
 from .hooks import (
     BackendHooks,
     InlineHooks,
     ListenerRegistry,
     MemoryLeakTracker,
-    register_svc,
     install_system_property_provider,
+    register_svc,
 )
 from .memory import Memory, Pointer
 
@@ -188,7 +190,8 @@ class Module:
         self.java.setEntryPoint(int(address))
 
     def call_entry(self, *arguments: str) -> int:
-        array = jpype.JArray(self._emulator._class("java.lang.String"))(arguments)
+        factory: Any = jpype.JArray(self._emulator._class("java.lang.String"))
+        array = factory(arguments)
         return int(
             self._emulator._run_checked(lambda: self.java.callEntry(self._emulator.java, array))
         )
@@ -296,6 +299,7 @@ class AndroidEmulator:
         self.syscalls = SyscallHandler(self, self.java.getSyscallHandler())
         self._module_refs: list[Module] = []
         self._callback_refs: list[Any] = []
+        self._mcp_server: Any = None
         self.hooks = BackendHooks(self)
         self.listeners = ListenerRegistry(self)
         self.inline = InlineHooks(self)
@@ -380,7 +384,8 @@ class AndroidEmulator:
         end: int | None = None,
     ) -> Trace:
         if callback is None:
-            raw = self.java.traceRead() if begin is None else self.java.traceRead(int(begin), int(end))
+            last = int(end) if end is not None else 0x7FFFFFFFFFFFFFFF
+            raw = self.java.traceRead() if begin is None else self.java.traceRead(int(begin), last)
             return Trace(self, raw)
         owner = self
 
@@ -401,7 +406,8 @@ class AndroidEmulator:
         end: int | None = None,
     ) -> Trace:
         if callback is None:
-            raw = self.java.traceWrite() if begin is None else self.java.traceWrite(int(begin), int(end))
+            last = int(end) if end is not None else 0x7FFFFFFFFFFFFFFF
+            raw = self.java.traceWrite() if begin is None else self.java.traceWrite(int(begin), last)
             return Trace(self, raw)
         owner = self
 
@@ -422,7 +428,8 @@ class AndroidEmulator:
         end: int | None = None,
     ) -> Trace:
         if callback is None:
-            raw = self.java.traceCode() if begin is None else self.java.traceCode(int(begin), int(end))
+            last = int(end) if end is not None else 0x7FFFFFFFFFFFFFFF
+            raw = self.java.traceCode() if begin is None else self.java.traceCode(int(begin), last)
             return Trace(self, raw)
         owner = self
 
@@ -465,7 +472,8 @@ class AndroidEmulator:
             if isinstance(value, int):
                 value = jpype.JLong(value)
             numbers.append(value)
-        array = jpype.JArray(self._class("java.lang.Number"))(numbers)
+        factory: Any = jpype.JArray(self._class("java.lang.Number"))
+        array = factory(numbers)
         return self._run_checked(lambda: self.java.eFunc(jpype.JLong(address), array))
 
     def register_svc(
@@ -486,13 +494,41 @@ class AndroidEmulator:
     def track_memory_leaks(self) -> MemoryLeakTracker:
         return MemoryLeakTracker(self, self.java.traceMemoryLeaks())
 
+    def mcp(
+        self,
+        *,
+        host: str = "127.0.0.1",
+        port: int = 9239,
+        allow_remote: bool = False,
+        event_limit: int = 1024,
+    ) -> Any:
+        from .mcp import PyUnidbgMcpServer
+
+        if self._mcp_server is not None:
+            raise RuntimeError("this emulator already owns an MCP server")
+        self._mcp_server = PyUnidbgMcpServer(
+            self,
+            host=host,
+            port=port,
+            allow_remote=allow_remote,
+            event_limit=event_limit,
+        )
+        return self._mcp_server
+
     def close(self) -> None:
         if not self._closed:
+            if self._mcp_server is not None:
+                self._mcp_server.stop()
             self.java.close()
             self._closed = True
 
-    def __enter__(self) -> AndroidEmulator:
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self.close()

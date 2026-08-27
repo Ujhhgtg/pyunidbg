@@ -38,6 +38,7 @@ def test_wechatx_python_harness_matches_known_outputs(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         timeout=120,
+        check=False,
     )
     assert result.returncode == 0, result.stdout[-4000:] + result.stderr[-4000:]
     output = tmp_path / "output"

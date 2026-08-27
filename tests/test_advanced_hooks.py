@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -154,7 +154,7 @@ def test_listeners_mmap_leaks_imports_and_system_properties() -> None:
 def test_inline_hook_engines() -> None:
     script = Path(__file__).parent / "run_inline_hook_checks.py"
     result = subprocess.run(
-        [sys.executable, str(script)], capture_output=True, text=True, timeout=30
+        [sys.executable, str(script)], capture_output=True, text=True, timeout=30, check=False
     )
     assert result.returncode == 0, result.stdout + result.stderr
 

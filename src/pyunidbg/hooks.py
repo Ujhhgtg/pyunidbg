@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum, IntFlag
 from pathlib import Path
-from typing import Any, Callable
+from types import TracebackType
+from typing import Any, Self
 
 import jpype
 
@@ -56,10 +58,15 @@ class HookHandle:
 
     remove = close
 
-    def __enter__(self) -> HookHandle:
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self.close()
 
 
@@ -363,10 +370,15 @@ class MMapRegistration:
                 self._emulator.memory.java.setMMapListener(self._previous)
             self._closed = True
 
-    def __enter__(self) -> MMapRegistration:
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self.close()
 
 
@@ -477,23 +489,28 @@ class MemoryLeakTracker:
             self.java.close()
             self._closed = True
 
-    def __enter__(self) -> MemoryLeakTracker:
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self.close()
 
 
 @dataclass(frozen=True, slots=True)
 class HookDecision:
-    call_original: bool
+    should_call_original: bool
     value: int = 0
 
     @classmethod
-    def original(cls) -> HookDecision:
+    def call_original(cls) -> HookDecision:
         return cls(True, 0)
 
-    call_original = original
+    original = call_original
 
     @classmethod
     def return_value(cls, value: int) -> HookDecision:
@@ -580,7 +597,7 @@ class _ReplaceDelegate:
                 self.states[state_id] = state
             return (
                 self.result.callOriginal(jpype.JLong(state_id))
-                if decision.call_original
+                if decision.should_call_original
                 else self.result.returnValue(jpype.JLong(decision.value), jpype.JLong(state_id))
             )
         except BaseException as exc:
