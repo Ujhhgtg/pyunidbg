@@ -15,7 +15,7 @@ Version 0.1 intentionally targets one current development environment:
 - a Java 17 or newer executable available as `java` on `PATH`
 - Android ARM64 emulation only
 - unidbg 0.9.9
-- the Unicorn2 backend used by unidbg
+- the default Unicorn backend bundled with unidbg
 
 macOS, Windows, Linux architectures other than x86_64, Android ARM32, iOS, alternate backends, older Python versions, and bundled Java runtimes are out of scope. Unsupported platforms fail before starting the JVM.
 
@@ -138,7 +138,7 @@ The installed package performs no network access and invokes no build system. It
 
 - unidbg 0.9.9 Android/API/backend JARs required by the selected runtime
 - all required transitive JARs
-- Linux x86_64 native libraries required by the Unicorn2 backend and its dependencies
+- Linux x86_64 native libraries required by the default Unicorn backend and its dependencies
 - the compiled JNI callback helper
 - upstream license and notice material
 
