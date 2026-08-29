@@ -9,10 +9,9 @@ the package, so emulator startup does not run Gradle, Maven, or a downloader.
 
 ## Status and API coverage
 
-The coverage estimate is based on 15 Android ARM64 feature families, not on a
-raw count of Java methods. Fourteen are fully wrapped and one currently requires
-direct Java access: **93% fully wrapped**. There are no partially covered
-families.
+The coverage estimate is based on 17 Android ARM64 feature families, not on a
+raw count of Java methods. All seventeen are covered: **100% fully wrapped**.
+There are no partially covered families.
 
 | Android ARM64 feature family | Status | Python coverage |
 | --- | --- | --- |
@@ -30,7 +29,9 @@ families.
 | Filesystem and Android environment | Full | Rootfs operations, syscall handler controls, byte/file IO resolvers, file listeners, and APK asset resolvers |
 | Advanced hooks and listeners | Full | Detachable backend hooks, module/import/mmap listeners, Dobby, HookZz, Whale, xHook, ARM64 SVCs, system properties, and leak tracking |
 | MCP integration | Full | Python-native modern `/mcp` server, 42 built-in tools, custom typed tools, events, allocations, and breakpoint execution control |
-| Threads, worker pools, and serialization | Java access | No Python convenience API yet |
+| Guest thread dispatcher | Full | Task inspection, scheduler control, signal sets, waiters, destruction callbacks, and raw task injection |
+| Worker pools | Full | Python-native lazy reusable pools, exclusive leases, invalidation, idle cleanup, statistics, and async execution |
+| State inspection and export | Full | Bounded JSON-compatible reports for registers, modules, mappings, tasks, breakpoints, and selected memory |
 
 Every wrapper exposes `.java`, and `pyunidbg.java_class()` provides access to
 the bundled unidbg classpath, so missing convenience methods usually do not
@@ -191,6 +192,70 @@ registers, assembly/disassembly, native calls, breakpoints, stepping, tracing,
 and event polling. Emulator operations are serialized through one MCP worker;
 Python-managed breakpoints pause the emulation thread while MCP tools inspect
 or modify state.
+
+## Guest threads
+
+Guest threads remain owned by unidbg's ARM scheduler; pyunidbg wraps that
+scheduler instead of attempting to reproduce CPU context switching in Python.
+
+```python
+emulator.threads.enabled = True
+
+for task in emulator.threads.tasks:
+    print(task.snapshot())
+
+emulator.threads.run_for(10, unit="milliseconds")
+emulator.threads.emulate_signal(2)
+```
+
+Signal masks use a Python wrapper around unidbg's `SigSet`:
+
+```python
+signals = emulator.threads.signal_set()
+signals.add(2)
+signals.remove(2)
+```
+
+## Python-native worker pools
+
+Workers may be arbitrary Python objects. Each worker is exclusively owned by
+one borrower at a time.
+
+```python
+pool = pyunidbg.WorkerPool(
+    create_worker,
+    max_size=4,
+    min_idle=1,
+    idle_timeout=600,
+)
+
+with pool.borrow(timeout=5) as worker:
+    result = worker.module.call_symbol("target")
+
+result = await pool.run_async(operation, timeout=5)
+pool.close()
+```
+
+Call `lease.invalidate()` before closing a lease when a worker is no longer
+safe to reuse.
+
+## State inspection
+
+```python
+report = emulator.inspect_state(
+    memory_ranges=((module.base, 0x100),),
+)
+report.save("inspection.json")
+```
+
+Reports contain registers, loaded modules, memory maps, guest task metadata,
+breakpoints, and only the explicitly requested memory ranges. They are
+diagnostic exports, not restorable snapshots.
+
+Although unidbg 0.9.9 declares `serialize(DataOutput)`, its ARM SVC memory,
+syscall handler, and dynamic linker implementations throw
+`UnsupportedOperationException`, and no deserializer exists. pyunidbg therefore
+does not expose misleading `dump_state()` or `restore_state()` APIs.
 
 ## WeChatX acceptance harness
 

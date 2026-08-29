@@ -21,6 +21,7 @@ from .hooks import (
     register_svc,
 )
 from .memory import Memory, Pointer
+from .threads import GuestThreadDispatcher
 
 
 @dataclass(frozen=True, slots=True)
@@ -297,6 +298,7 @@ class AndroidEmulator:
         self.vm = VM(self, raw_vm)
         self.filesystem = FileSystem(self, self.java.getFileSystem())
         self.syscalls = SyscallHandler(self, self.java.getSyscallHandler())
+        self.threads = GuestThreadDispatcher(self)
         self._module_refs: list[Module] = []
         self._callback_refs: list[Any] = []
         self._mcp_server: Any = None
@@ -493,6 +495,22 @@ class AndroidEmulator:
 
     def track_memory_leaks(self) -> MemoryLeakTracker:
         return MemoryLeakTracker(self, self.java.traceMemoryLeaks())
+
+    def inspect_state(
+        self,
+        *,
+        memory_ranges: tuple[tuple[int, int], ...] = (),
+        max_capture_size: int = 1024 * 1024,
+    ) -> Any:
+        from .serialization import inspect_emulator_state
+
+        return self._run_checked(
+            lambda: inspect_emulator_state(
+                self,
+                memory_ranges=memory_ranges,
+                max_capture_size=max_capture_size,
+            )
+        )
 
     def mcp(
         self,
