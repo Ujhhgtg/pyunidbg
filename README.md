@@ -49,7 +49,7 @@ receives every remaining unidbg method/field callback with a stable snake-case
 operation name and the appropriate typed return conversion.
 
 ```bash
-uv add /home/ujhhgtg/coding/pyunidbg
+uv add git+https://github.com/Ujhhgtg/pyunidbg
 ```
 
 ```python
