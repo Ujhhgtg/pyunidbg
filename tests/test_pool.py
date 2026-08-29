@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import subprocess
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -118,3 +120,31 @@ def test_real_emulator_workers_are_exclusive_and_reusable() -> None:
         assert results == [index + index + 1 for index in range(12)]
         assert pool.stats.created == 2
         assert pool.stats.idle == 2
+
+
+def test_jvm_started_in_worker_thread_exits_cleanly(tmp_path: Path) -> None:
+    # If the JVM is first started from a short-lived worker thread, that thread
+    # becomes the JVM's non-daemon main thread; interpreter exit then waits on
+    # it forever unless pyunidbg detaches it after startup.
+    script = tmp_path / "worker_jvm_exit.py"
+    script.write_text(
+        "from concurrent.futures import ThreadPoolExecutor\n"
+        "import pyunidbg\n"
+        "\n"
+        "def factory():\n"
+        "    return pyunidbg.AndroidEmulator('io.pyunidbg.workerexit')\n"
+        "\n"
+        "with ThreadPoolExecutor(max_workers=2) as pool:\n"
+        "    emulators = list(pool.map(lambda index: factory(), range(2)))\n"
+        "for emulator in emulators:\n"
+        "    emulator.close()\n"
+        "print('done')\n",
+    )
+    result = subprocess.run(
+        [sys.executable, str(script)],
+        capture_output=True,
+        text=True,
+        timeout=90,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "done" in result.stdout

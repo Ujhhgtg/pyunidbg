@@ -112,6 +112,13 @@ def ensure_jvm() -> None:
             classpath=_classpath(),
             convertStrings=True,
         )
+        if threading.current_thread() is not threading.main_thread():
+            # The thread that starts the JVM becomes HotSpot's non-daemon
+            # "main" thread. If it exits before DestroyJavaVM runs (a worker
+            # pool thread, for example), interpreter shutdown blocks forever
+            # waiting on it. Detach so later Java calls from this thread
+            # re-attach as a daemon instead.
+            jpype.java.lang.Thread.detach()
         _STARTED_BY_US = True
         try:
             jpype.JClass(_REQUIRED_CLASS)
